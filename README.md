@@ -21,7 +21,7 @@ Nous utilisons **RStudio** pour réaliser une chaîne de traitement complète :
 ## L'Équipe Étudiante
 * **Kenny Jean-elie**
 * **Ibrahima Caba Bah**
-* **Fatou Diop Ndeye**
+* **Ndèye Fatou DIOP**
 
 ---
 *Dernière mise à jour : 26 Novembre 2025*
