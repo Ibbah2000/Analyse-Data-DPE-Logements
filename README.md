@@ -15,7 +15,7 @@ L'objectif est d'appliquer différentes méthodes d'analyse de données sur notr
 Nous utilisons **RStudio** pour réaliser une chaîne de traitement complète :
 1.  **Nettoyage des données :** Gestion des valeurs manquantes et discrétisation.
 2.  **Analyses Factorielles :** ACP, AFC et **ACM** (Analyse des Correspondances Multiples).
-3.  **Classification :** Classification Ascendante Hiérarchique (**CAH/HCPC**) sur les résultats de l'ACM puis **K-Means**
+3.  **Classification :** Classification Ascendante Hiérarchique (**CAH/HCPC**) sur les résultats de l'ACM 
 
 ## L'Équipe Étudiante
 * **Kenny Jean-elie**
