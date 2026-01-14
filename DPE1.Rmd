@@ -1,0 +1,998 @@
+---
+output:
+   pdf_document:
+    toc_depth: 3
+    number_sections: true
+    fig_caption: true
+    keep_tex: false
+geometry: "top=1.5cm, bottom=1.5cm, left=2cm, right=2cm"
+header-includes:
+  - \usepackage{placeins}
+  - \usepackage{pdfpages}
+  - \usepackage{titling}
+  - \usepackage{tikz}
+  - \usepackage{float}
+lang: fr-FR
+---
+
+
+\begin{titlepage}
+    \begin{tikzpicture}[remember picture,overlay]
+        \node[inner sep=0] at (current page.center) {
+            \includegraphics[width=\paperwidth, height=\paperheight]{Projet_DPE.jpeg}
+        };
+        
+        \node[fill=white, fill opacity=0.8, text opacity=1, inner sep=1cm] 
+            at (current page.center) {
+            \begin{minipage}{1.0\textwidth}
+                \centering
+                {\Huge \textbf{Datamining et Datavisualisation\\[0.7cm]}
+                {\ Diagnostic de Performance Energétique} \\[0.7cm]}
+                {\Large Rapport de Projet \\[0.7cm]}
+                {\large Année universitaire 2025-2026 \\[0.7cm]}
+                {\large Par : \textbf{Kenny Jean Elie- Ndèye Fatou DIOP- Ibrahima Caba BAH}}
+            \end{minipage}
+        };
+    \end{tikzpicture}
+\end{titlepage}
+
+\newpage
+\tableofcontents 
+\newpage
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE,
+                      warning = FALSE,
+                      message = FALSE )
+```
+
+```{r library, include=FALSE}
+library(tinytex)
+library(FactoMineR)
+library(knitr)
+library(kableExtra)
+library(tidyverse) 
+library(corrplot)
+library(FactoMineR)
+library(factoextra)
+library(DT)
+library(ggpubr)
+library(missMDA)
+library(patchwork)
+library(placer)
+```
+
+```{r couleurs }
+
+couleurs <- c("A" = "#4CAF50",  
+              "B" = "#8BC34A",  
+              "C" = "#FFEB3B",  
+              "D" = "#FFC107",  
+              "E" = "#FF9800", 
+              "F" = "#FF5722",  
+              "G" = "#F44336")  
+
+couleurs_ges <- c("A" = "#c2c2c2",  
+                  "B" = "#E6D9F0",  
+                  "C" = "#D4C5E0",  
+                  "D" = "#C1AACE",  
+                  "E" = "#AE8FBD",  
+                  "F" = "#9B74AB",  
+                  "G" = "#88599A")  
+
+
+```
+
+
+```{r, Importation de la base de données , include=FALSE}
+df<-read.csv("basse_final.csv",sep = ",", dec = ".",header = TRUE)[,-1]
+sum(is.na(df))
+DPE <- na.omit(df)
+```
+
+```{r, traitement de la base de données, include=FALSE}
+colnames(DPE)[1] <- "Conso_an_tot_adresse"
+colnames(DPE)[2] <- "Conso_an_moy_logement"
+colnames(DPE)[3] <- "Conso_an_moy_com"
+colnames(DPE)[8] <- "An_Const"
+colnames(DPE)[9] <- "Surf_Hab"
+
+```
+
+\newpage
+
+**Introduction**
+
+
+Face aux enjeux climatiques contemporains et à la nécessité impérieuse de réussir la transition énergétique, le secteur du bâtiment se retrouve au cœur des politiques publiques. En France, le secteur résidentiel est l'un des plus gros consommateurs d'énergie finale et l'un des principaux émetteurs de gaz à effet de serre. Dans ce contexte, l'exploitation des Diagnostics de Performance Énergétique (DPE) ne représente plus seulement une obligation légale, mais devient une source de données stratégique pour comprendre et agir sur l'efficacité thermique de notre parc immobilier.
+
+Le présent projet s'inscrit dans cette démarche d'intelligence des données (Data Mining). Nous disposons d'un jeu de données riche et multidimensionnel incluant des variables techniques (surface, année de construction), économiques (coûts annuels d'énergie) et environnementales (émissions de GES). Cependant, la complexité de ces informations et les fortes corrélations entre elles rendent leur interprétation directe difficile. L'enjeu de notre étude est donc de répondre à la problématique suivante : Comment structurer et segmenter les données énergétiques pour identifier des profils types de logements et hiérarchiser les facteurs déterminants de leur consommation ?
+
+Pour répondre à cette question, nous avons adopté une méthodologie rigoureuse articulée autour de trois axes majeurs. Tout d'abord, nous mettons en œuvre une Analyse en Composantes Principales (ACP) afin de réduire la dimensionnalité du problème, d'éliminer les redondances d'informations et de dégager les axes structurants de la consommation. Ensuite, sur la base de ces axes, nous réalisons une Classification (HCPC) pour regrouper les logements en classes homogènes. Enfin, nous procédons à une caractérisation détaillée de ces groupes afin d'isoler les spécificités des « passoires thermiques » par rapport aux logements performants. 
+
+Ce rapport détaille chacune de ces étapes, en commençant par l'analyse fondamentale des structures de corrélation via l'ACP, pivot central de notre exploration statistique.
+
+
+## Traitement de la base de donnés
+
+La phase de prétraitement a été déterminante pour réconcilier les caractéristiques techniques des Diagnostics de Performance Énergétique (DPE) avec les relevés de consommation réelle. Ce processus s'est articulé autour de trois axes :  
+- **Standardisation et appariement**: Le défi principal résidait dans l'absence d'identifiant unique commun aux deux sources. Nous avons donc construit une adresse standardisée en procédant à une normalisation syntaxique rigoureuse : passage en majuscules, suppression de la ponctuation et correction des espaces. Ce traitement garantit la fiabilité de la jointure en éliminant les disparités de saisie textuelle entre les bases.  
+- **Filtrage temporel et gestion de l'unicité **:Afin d'assurer la pertinence de l'étude, nous avons restreint l'échantillon aux données de l'année 2024. Les dates de réception des DPE ont été converties pour isoler cette période, et un traitement spécifique a été appliqué aux codes postaux pour harmoniser leur format. Par ailleurs, une procédure de dédoublonnage a été effectuée sur la base DPE pour ne conserver qu'un seul enregistrement par adresse, assurant ainsi l'unicité des logements analysés.  
+- **Fusion et constitution de la base finale**: Le processus s'est conclu par une jointure interne (Inner Join) basée sur l'adresse standardisée. Ce choix méthodologique permet d'exclure les enregistrements incomplets et de ne retenir que les logements présents simultanément dans les deux référentiels.
+
+Le résultat est une table consolidée et robuste, socle de notre analyse statistique. Elle permet d'étudier avec précision la corrélation entre la performance théorique des logements et leur consommation énergétique réelle pour l'année 2024.
+
+# Analyses en Composantes Principales (ACP)
+
+L’Analyse en Composantes Principales (ACP) constitue la première étape de notre étude multidimensionnelle. Son objectif est double : d'une part, synthétiser l'information contenue dans notre jeu de données composé de variables quantitatives, et d'autre part, identifier les structures de corrélation sous-jacentes entre les indicateurs de consommation énergétique et les caractéristiques des bâtiments.
+
+## Analyse de la matrice de corrélation
+
+```{r figure1, fig.cap="Matrice de corrélation", dev="png", dpi=100, fig.width=7, fig.height=7, echo=FALSE, out.width="70%", fig.align="center"}
+DPE_num <- DPE[, sapply(DPE, is.numeric)] 
+TabCor <- cor(DPE_num, use = "pairwise.complete.obs")
+corrplot(TabCor,
+         type = "upper",
+         diag = FALSE,
+         method = "circle",
+         tl.col = "black",
+         tl.srt = 45,
+         tl.pos = "lt",
+         addCoef.col = "black",
+         number.cex = 0.7,
+         tl.cex = 0.8)
+```
+
+Avant de procéder à la réduction dimensionnelle, l'examen de la matrice de corrélation est essentiel pour justifier l'emploi de l'ACP.  
+- **Bloc de forte colinéarité** : Nous observons un groupe de variables extrêmement liées entre elles : la surface habitable (*surface_habitable_logement*), la consommation des 5 usages (*conso_5.usages_ef*), les émissions de gaz à effet de serre (*emission_ges_5_usages*) et le coût total (*cout_total_5_usages*). Les coefficients de corrélation entre ces variables sont tous supérieurs à 0,93, frôlant même 0,98 pour le couple coût/consommation. Cela indique une redondance d'information : ces variables décrivent essentiellement le même phénomène de "volume énergétique" lié à la taille du logement.  
+- **Corrélations modérées et faibles **: La variable C.totale présente une corrélation modérée avec *C.moyenne/adr* (0,30). En revanche, l'année de construction et le nombre d'appartements semblent être des variables indépendantes des indicateurs de consommation brute, avec des coefficients proches de zéro.
+
+
+```{r, include= FALSE}
+resacp <- PCA(DPE, graph = T, quali.sup = 4:7)
+```
+
+##   Étude des valeurs propres et choix de la dimensionnalité
+
+```{r, results='hide'}
+resacp$eig |>  kable(digits = c(2,1,1))
+```
+
+L'analyse de l'inertie (les valeurs propres) nous permet de décider du nombre de composantes principales à conserver pour ne pas perdre trop d'information tout en simplifiant le modèle.
+D'après les résultats :  
+- Le critère de Kaiser (valeurs propres > 1) nous suggère de retenir les 4 premiers axes.  
+- L'inertie cumulée montre que les trois premiers axes capturent déjà plus de 70 % de la variance totale du jeu de données. Pour ce rapport, nous nous concentrerons principalement sur le premier plan factoriel (Dim 1 & 2) et le troisième axe pour l'interprétation.
+
+
+```{r figure2, fig.cap= "Représentation des inerties", echo=FALSE, dpi=100, echo=FALSE, out.width="60%", fig.align="center"}
+fviz_eig(resacp, addlabels = TRUE,
+         ylim = c(0,70),
+         ylab = "Part de variables expliquée ",
+         )
+```
+\FloatBarrier
+
+## Tableau des coordonnées des variables:
+
+```{r}
+CoordVar <- resacp$var$coord[,1:3]
+Tab<-cbind(CoordVar)
+colnames(Tab)<-c("F1","F2","F3")
+knitr::kable(Tab, digits = 3, caption = "Coordonnées des variables sur les axes 1 à 3", booktabs= TRUE)
+```
+
+## Etude des contributions des variables:
+
+```{r figure3, fig.cap="Etude des contributions des variables", echo=FALSE, dpi=100, out.width="100%", out.height="50%", fig.align="center", fig.pos="H" }
+fig1 <- fviz_contrib(resacp, choice="var", axes=1) + 
+  ggtitle("Contributions Axe 1") + 
+  theme(axis.text.x = element_text(size = 8)) 
+
+fig2 <- fviz_contrib(resacp, choice="var", axes=2) + 
+  ggtitle("Contributions Axe 2") + 
+  theme(axis.text.x = element_text(size = 8))
+
+fig3 <- fviz_contrib(resacp, choice="var", axes=3) + 
+  ggtitle("Contributions Axe 3") + 
+  theme(axis.text.x = element_text(size = 8))
+
+ggarrange(fig1, fig2, fig3, ncol = 3)
+```
+\FloatBarrier
+
+**Interprétation des axes factoriels:**  
+   **Axe 1** : Le facteur de "Gabarit et Consommation" (43,1 % d'inertie)  
+Cet axe est le plus discriminant. Il est presque exclusivement construit par les variables de volume :  
+- *Variables dominantes* : conso_5.usages_ef (coord: 0,99), cout_total_5_usages (0,99) et surface_habita*ble_logement (0,97).  
+- *Signification* : Cet axe oppose les grands ensembles ou logements vastes, fortement énergivores et coûteux, aux petites unités d'habitation économes. Sa contribution à la variance est massive.  
+   **Axe 2** : Le facteur de "Consommation Spécifique" (14,5 % d'inertie)
+Ce deuxième axe apporte une information complémentaire non liée à la surface :  
+- *Variables dominantes*: C.totale (coord: 0,80) et C.moyenne/adr (0,80).  
+- *Signification* : Il représente l'intensité de la consommation par adresse, indépendamment du gabarit physique du bâtiment.  
+   **Axe 3** : Le facteur "Temporel et Communal" (13,4 % d'inertie)
+Ce troisième axe introduit une dimension temporelle et géographique :  
+- *Variables dominantes* : annee_construction (coord: 0,80) et C.moyenne/com (0,80).  
+- *Signification* : Cet axe permet d'isoler l'effet de l'ancienneté du bâtiment et les disparités géographiques (moyennes par commune).
+
+## Représentation des variables avec la qualité de représentation
+
+```{r figure4, fig.cap="Cercle des corrélations", echo=FALSE, dpi=100, out.width="70%", fig.align="center"}
+library(factoextra)
+
+fviz_pca_var(resacp,
+             col.var = "cos2",                  
+             gradient.cols = c("#00AFBB", "#E7B800", "#FC4E07"), 
+             repel = TRUE,                    
+             labelsize = 3,                   
+             ggtheme = theme_minimal()        
+)
+```
+
+Le cercle des corrélations (Plan F1-F2) illustre parfaitement ces regroupements:  
+-	Les vecteurs représentant la surface, le coût et la consommation de GES sont très longs et superposés sur la partie droite de l'axe 1, indiquant une excellente qualité de représentation (Cos² > 0,94 pour la plupart).  
+- Les variables *C.totale* et *C.moyenne/adr* pointent verticalement vers le haut sur l'axe 2.  
+-Le centre du cercle contient les variables *nombre_appartement* ou *annee_construction*, signifiant qu'elles ne sont pas expliquées par ce premier plan mais nécessitent les axes suivants (notamment l'axe 3) pour être interprétées.
+
+## Conclusion de l'ACP:
+
+
+L'ACP a permis de réduire la complexité du jeu de données initial tout en conservant l'essentiel de l'information. Les trois premiers axes factoriels identifiés offrent une interprétation claire des dimensions sous-jacentes : le gabarit et la consommation énergétique globale, l'intensité de consommation spécifique, et les effets temporels et géographiques. Ces résultats serviront de base pour les analyses ultérieures, notamment la classification des bâtiments selon leurs profils énergétiques.
+
+
+
+# Analyse des correspondances Factorielles
+
+```{r, echo= FALSE}
+Tab <- table(DPE$etiquette_dpe, DPE$etiquette_ges)
+res.CA <- CA(Tab, graph= FALSE)
+
+Tab_avec_totaux <- Tab |> 
+  as.data.frame.matrix() |>  
+  mutate(Total = rowSums(Tab)) |>  
+  rbind(Total = c(colSums(Tab), sum(Tab)))
+
+```
+
+L’Analyse des Correspondances Factorielles (ACF) est une méthode statistique descriptive permettant d’étudier les relations entre deux variables qualitatives présentées sous la forme d’un tableau de contingence. Elle vise à résumer l’information contenue dans ce tableau en un nombre réduit de dimensions, tout en conservant les principales structures et oppositions présentes dans les données.
+
+Dans le cadre de notre étude, l’AFC constitue un outil particulièrement pertinent pour analyser les liens entre les Modalités observées des variables étiquettes DPE et les étiquettes GES, ( de gaz a effet de serre ) afin d’étudier les correspondances entre les classes de performance énergétique et les niveaux d’émissions de gaz à effet de serre et mettre en évidence des profils ou des associations spécifiques.
+
+## Test de Chi2
+
+```{r}
+pourcent <- function(x){x*100}
+restest <- chisq.test(Tab)
+Tabresult <- c(paste("Chi2 =",round(restest$statistic, 2)),
+               paste("df =", restest$parameter),
+               paste("P_value =",round(restest$p.value,6)
+))
+kable(Tabresult, col.names = "Resultat test") |>  kable_minimal(full_width = F)
+```
+
+Le test du Chi² met en évidence une association très forte entre les étiquettes DPE et les étiquettes GES. Avec une statistique de Chi² de **14907.6** pour **36 degrés de liberté** et une **p‑value égale à 0**, on rejette clairement l’hypothèse d’indépendance. Autrement dit, la répartition des classes GES n’est pas due au hasard : elle varie nettement selon la classe énergétique du logement.
+
+## Tableau de contingence 
+
+```{r tableau }
+
+
+rownames_colores <- sapply(rownames(Tab_avec_totaux), function(x) {
+  if(x %in% names(couleurs)) {
+    paste0("\\textcolor[HTML]{", gsub("#", "", couleurs[x]), "}{\\textbf{", x, "}}")
+  } else {
+    x
+  }
+})
+
+rownames(Tab_avec_totaux) <- rownames_colores
+
+
+colnames_colores <- sapply(colnames(Tab_avec_totaux), function(x) {
+  if(x %in% names(couleurs)) {
+    paste0("\\textcolor[HTML]{", gsub("#", "", couleurs_ges[x]), "}{\\textbf{", x, "}}")
+  } else {
+    x
+  }
+})
+
+
+Tab_avec_totaux |> 
+  kable(format = "latex", 
+        booktabs = TRUE, 
+        align = "c", 
+        linesep = "",
+        col.names = colnames_colores,
+        escape = FALSE, digits= 3,caption = "Tableau de contingence") |> 
+  kable_styling(position = "center", latex_options = "hold_position") |> 
+  add_header_above(c("DPE" = 1, "Étiquettes GES" = ncol(Tab), "Total" = 1)) |> 
+  row_spec(nrow(Tab_avec_totaux), bold = TRUE) |>
+  column_spec(ncol(Tab_avec_totaux) + 1, bold = TRUE)
+```
+
+
+Ce tableau de contingence permet de visualiser comment les deux variables se répartissent conjointement. On observe déjà des concentrations fortes dans certaines combinaisons, laissant supposer une dépendance entre les modalités.
+
+## Qualité globale de l'ACF
+
+Il est désormais pertinent d’examiner plus finement la structure de leur association. L’étude des inerties va nous permettre d’identifier quelles dimensions résument le mieux l’information contenue dans le tableau, et de déterminer combien d’axes sont réellement nécessaires pour interpréter les correspondances observées.
+
+```{r figure5, fig.cap="Etude de la dimensionnalité", echo=FALSE, out.width="60%", fig.align="center"}
+fviz_screeplot(res.CA, addlabels =TRUE, barfill = "blue")
+``` 
+\FloatBarrier
+
+L'inertie montre que les quatre premiers axes concentrent l’essentiel de l’information, cumulant 
+`r round(res.CA$eig[4,3])`  % de la variance totale. Ils décrivent donc très bien la structure du tableau de contingence. Toutefois, nous choisissons de nous concentrer uniquement sur les deux premiers axes, qui résument déjà `r round(res.CA$eig[2,3])` % de l’inertie et révèlent les oppositions les plus structurantes. Les résultats détaillés des **dimensions 3 et 4**, ainsi que leurs représentations graphiques, sont présentés en **annexe** pour approfondir l’analyse.
+
+### Etude des contributions à l'axe 1 
+
+```{r figure6, fig.cap="Etude des contributions des modalités à l'axe 1", fig.align="center", out.width="65%"}
+
+contrib_dim1 <- res.CA$row$contrib[, 1]
+contrib_dim2 <- res.CA$col$contrib[, 1]
+
+contrib_data1 <- data.frame(
+  DPE = names(contrib_dim1),
+  Contribution = as.numeric(contrib_dim1)
+)
+
+contrib_data2 <- data.frame(
+  DPE = names(contrib_dim2),
+  Contribution = as.numeric(contrib_dim2)
+)
+
+ligne_ref <- 100 / nrow(contrib_data1)
+ligne_ref <- 100 / nrow(contrib_data2)
+
+fig1 <- ggplot(contrib_data1, aes(x = reorder(DPE, -Contribution), 
+                                  y = Contribution, 
+                                  fill = DPE)) +
+  geom_col() +
+  scale_fill_manual(values = couleurs) +
+  geom_hline(yintercept = ligne_ref, 
+             linetype = "dashed", 
+             color = "red", 
+             linewidth = 0.8) +
+  labs(title = "Contribution des DPE à la Dim1",
+       x = "",
+       y = "Contributions (%)") +
+  theme_minimal() +
+  theme(legend.position = "none",
+        plot.title = element_text(hjust = 0.5, size = 14, face = "bold"))
+
+fig2 <- ggplot(contrib_data2, aes(x = reorder(DPE, -Contribution), 
+                                  y = Contribution, 
+                                  fill = DPE)) +
+  geom_col() +
+  scale_fill_manual(values = couleurs_ges) +
+  geom_hline(yintercept = ligne_ref, 
+             linetype = "dashed", 
+             color = "red", 
+             linewidth = 0.8) +
+  labs(title = "Contribution des GES à la Dim 1",
+       x = "",
+       y = "Contributions (%)") +
+  theme_minimal() +
+  theme(legend.position = "none",
+        plot.title = element_text(hjust = 0.5, size = 14, face = "bold"))
+
+ggarrange(fig1, fig2, ncol = 2)
+```
+\FloatBarrier
+
+Ce graphique des contributions à l’axe 1 met en évidence une structuration très nette autour des modalités C et E, tant du côté des étiquettes DPE que GES. Ces deux classes dominent largement la construction de l’axe, avec des contributions supérieures à 30 %, ce qui indique qu’elles jouent un rôle central dans l’opposition représentée. À l’inverse, les classes A, B et F apparaissent comme marginales, avec des contributions très faibles, elles interviennent peu dans la dynamique principale captée par cet axe. Aussi peut-etre car A et B, ont des contributions très faibles à l’axe 1. Cela peut s’expliquer par leur faible fréquence dans le tableau de contingence, ce qui limite leur poids dans la construction des dimensions. À l’inverse, les modalités C et E, sont beaucoup plus représentées.
+
+L’axe 1 reflète donc une tension entre des niveaux intermédiaires de performance énergétique et d’émissions, plutôt que les extrêmes.
+
+
+### Etude des contributions à l'axe 2
+
+```{r figure7, fig.cap="Etude des contributions des modalités à l'axe 2", fig.align="center", out.width="65%"}
+
+contrib_dim3 <- res.CA$row$contrib[, 2]
+contrib_dim4 <- res.CA$col$contrib[, 2]
+
+
+contrib_data3 <- data.frame(
+  DPE = names(contrib_dim3),
+  Contribution = as.numeric(contrib_dim3)
+)
+
+contrib_data4 <- data.frame(
+  DPE = names(contrib_dim4),
+  Contribution = as.numeric(contrib_dim4)
+)
+
+ligne_ref <- 100 / nrow(contrib_data3)
+ligne_ref <- 100 / nrow(contrib_data4)
+
+
+fig1 <- ggplot(contrib_data3, aes(x = reorder(DPE, -Contribution), 
+                                  y = Contribution, 
+                                  fill = DPE)) +
+  geom_col() +
+  scale_fill_manual(values = couleurs) +
+  geom_hline(yintercept = ligne_ref, 
+             linetype = "dashed", 
+             color = "red", 
+             linewidth = 0.8) +
+  labs(title = "Contribution des DPE à la Dim2",
+       x = "",
+       y = "Contributions (%)") +
+  theme_minimal() +
+  theme(legend.position = "none",
+        plot.title = element_text(hjust = 0.5, size = 14, face = "bold"))
+
+fig2 <- ggplot(contrib_data4, aes(x = reorder(DPE, -Contribution), 
+                                  y = Contribution, 
+                                  fill = DPE)) +
+  geom_col() +
+  scale_fill_manual(values = couleurs_ges) +
+  geom_hline(yintercept = ligne_ref, 
+             linetype = "dashed", 
+             color = "red", 
+             linewidth = 0.8) +
+  labs(title = "Contribution des GES à la Dim 2",
+       x = "",
+       y = "Contributions (%)") +
+  theme_minimal() +
+  theme(legend.position = "none",
+        plot.title = element_text(hjust = 0.5, size = 14, face = "bold"))
+
+ggarrange(fig1, fig2, ncol = 2)
+```
+\FloatBarrier
+
+L’axe 2 est principalement structuré par les modalités F, D et G, aussi bien du côté des étiquettes DPE que GES. Ces classes, qui correspondent à des niveaux de performance énergétique et d’émissions plus élevés, contribuent fortement à la construction de cet axe. À l’inverse, les classes A, B et C sont peu représentées, ce qui peut s’expliquer par leur faible fréquence dans le tableau de contingence. Cet axe semble donc refléter une opposition entre les logements les plus polluants et les autres, en mettant en lumière les profils les plus énergivores et les plus émetteurs.
+
+## Synthèse finale
+
+```{r figure8, fig.cap= "Biplot des étiquettes DPE et GES", fig.align="center", out.width="60%"}
+row_coord <- as.data.frame(res.CA$row$coord[, 1:2])
+col_coord <- as.data.frame(res.CA$col$coord[, 1:2])
+colnames(col_coord)[1] <- "Dim.1"
+colnames(col_coord)[2] <- "Dim.2"
+colnames(row_coord)[1] <- "Dim.1"
+colnames(row_coord)[2] <- "Dim.2"
+
+ggplot() +
+  geom_point(data = row_coord, aes(x = Dim.1, y = Dim.2), 
+             color = couleurs_ges, shape = 19, size = 3) +
+  geom_text(data = row_coord, aes(x = Dim.1, y = Dim.2, label = rownames(row_coord)),
+            color = couleurs_ges, vjust = -1) +
+  geom_point(data = col_coord, aes(x = Dim.1, y = Dim.2), 
+             color = couleurs, shape = 17, size = 3) +
+  geom_text(data = col_coord, aes(x = Dim.1, y = Dim.2, label = rownames(col_coord)),
+            color = couleurs, vjust = -1) +
+  geom_hline(yintercept = 0, linetype = "dashed") +
+  geom_vline(xintercept = 0, linetype = "dashed") +
+  theme_minimal() +
+  labs(x = "Dim1 (30.3%)", y = "Dim2 (27.5%)") +
+  xlim(-1.5, 2) +
+  ylim(-1, 2.5)
+```
+\FloatBarrier
+
+Les points en triangle représentent les étiquettes DPE, tandis que les points en cercle correspondent aux étiquettes GES.
+L’axe 1 (30.3 % de l’inertie) oppose des modalités très marquées à d’autres plus diffuses. L’axe 2 (27.5 %) met en évidence des nuances plus fines de comportement ou de positionnement. Certaines étiquettes, comme DPE-F ou GES-C, se démarquent nettement du centre, indiquant une forte contribution à la structuration de l’espace ; signe de profils atypiques ou de comportements singuliers.
+La proximité de certaines étiquettes rouges et bleues dans un même quadrant suggère des convergences ponctuelles entre les deux familles, bien que ces rapprochements restent minoritaires face à la séparation globale. Ce contraste illustre la diversité des profils et confirme l’intérêt de l’AFC pour révéler les logiques sous-jacentes aux données.
+
+## Conclusion de l'AFC
+
+L’AFC met clairement en évidence une forte dépendance entre les étiquettes DPE et GES, confirmée par un Chi² très significatif. Les deux premiers axes, qui résument plus de la moitié de l’inertie totale, révèlent les oppositions majeures : l’axe 1 distingue surtout les modalités intermédiaires comme C et E, tandis que l’axe 2 isole les profils les plus énergivores et émetteurs, notamment F et G. Le biplot illustre ces contrastes et montre des regroupements cohérents entre classes énergétiques et niveaux d’émissions. Dans l’ensemble, l’AFC offre une lecture synthétique et structurée des correspondances entre performance énergétique et émissions de gaz à effet de serre.
+
+
+# Analyse en Composantes Multiples (ACM)
+
+L'Analyse des Correspondances Factorielles (AFC) nous a permis de valider le lien direct entre la performance énergétique et les émissions de gaz à effet de serre. Cependant, pour répondre pleinement à notre problématique sur la différenciation des logements selon leur contexte de construction, une analyse bivariée ne suffit plus.
+
+L'Analyse des Correspondances Multiples (ACM) est ici mobilisée pour traiter simultanément l'ensemble des dimensions qualitatives de notre étude. Elle va nous permettre d'observer comment les diagnostics techniques (DPE, GES) s'articulent avec les caractéristiques physiques comme la surface habitable et les périodes historiques de construction.
+
+Alors que l'ACP se concentrait sur les volumes et les mesures quantitatives , l'ACM va révéler la structure latente de notre parc immobilier en regroupant les modalités qui définissent les profils types que nous analyserons par la suite dans la phase de clustering.
+ 
+
+```{r, include=FALSE}
+df2 <- df |>
+
+  rename(Conso_totale = ,
+
+         Conso_Moy_log = Consommation.annuelle.moyenne.par.logement.de.l.adresse..MWh.,
+
+         Conso_com = Consommation.annuelle.moyenne.de.la.commune..MWh. ) |>
+
+  select(-adresse, -numero_dpe) |>
+
+  na.omit()
+
+df2$etiquette_dpe <- as.factor(df2$etiquette_dpe)
+
+df2$etiquette_ges <- as.factor(df2$etiquette_ges)
+
+bornes_annee <- unique(quantile(df2$annee_construction, probs = seq(0, 1, 0.25), na.rm = TRUE))
+
+labels_annee <- paste0(head(bornes_annee, -1), "-", tail(bornes_annee, -1))
+
+df2$annee_construction <- cut(df2$annee_construction,
+
+                              breaks = bornes_annee,
+
+                              labels = labels_annee,
+
+                              include.lowest = TRUE)
+
+nouveaux_noms <- c("Avant 1945",
+
+                   "(1945-1968)",
+
+                   "(1969-1980)",
+
+                   "Récents (Post 1980)")
+
+levels(df2$annee_construction) <- nouveaux_noms
+
+
+bornes_surface <- unique(quantile(df2$surface_habitable_logement, probs = seq(0, 1, 0.25), na.rm = TRUE))
+
+labels_surface <- paste0(round(head(bornes_surface, -1),0), "m-", round(tail(bornes_surface, -1),0), "m")
+
+df2$surface_habitable_logement <- cut(df2$surface_habitable_logement,
+
+                                      breaks = bornes_surface,
+
+                                      labels = labels_surface,
+
+                                      include.lowest = TRUE)
+
+bornes_conso <- unique(quantile(df2$conso_5.usages_ef, probs = seq(0, 1, 0.25), na.rm = TRUE))
+
+labels_conso <- paste0(round(head(bornes_conso, -1),0), "-", round(tail(bornes_conso, -1),0))
+
+df2$conso_5.usages_ef <- cut(df2$conso_5.usages_ef,
+
+                             breaks = bornes_conso,
+
+                             labels = labels_conso,
+
+                             include.lowest = TRUE)
+
+bornes_nb <- unique(quantile(df2$nombre_appartement, probs = seq(0, 1, 0.25), na.rm = TRUE))
+
+labels_nb <- paste0(head(bornes_nb, -1), "-", tail(bornes_nb, -1))
+
+df2$nombre_appartement <- cut(df2$nombre_appartement,
+
+                              breaks = bornes_nb,
+
+                              labels = labels_nb,
+
+                              include.lowest = TRUE)
+
+```
+
+
+```{r}
+quali<- c(4,5,6,7,8,11)
+quanti<-c(1,2,3,9,10)
+```
+
+```{r}
+ACM<-MCA(df2,quanti.sup = quanti ,graph = F, ncp = Inf)
+```
+
+## Etude des inerties
+
+```{r}
+inertie_ACM<- ACM$eig |> round(2)
+```
+
+**Représentation graphique des Inerties**:
+
+```{r figure9, fig.cap="Etude des inerties de l'ACM", out.width="60%", fig.align="center"}
+fviz_screeplot(ACM,addlabels = TRUE)
+```
+Contrairement à l'ACP qui concentrait l'information sur 2-3 axes, l'ACM révèle une structure plus repartie avec 10 dimensions nécessaires pour capturer la complexité des données. Les deux premiers axes n'expliquent que 18,9% de l'inertie totale.
+
+## Etude des contributions des variables
+
+```{r figure10, fig.cap="Etude des contributions des variables aux axes de l'ACM", out.width="60%", fig.align="center"}
+
+f1<-fviz_contrib(ACM,choice = "var", axes = 1)+
+
+  theme(axis.text.x = element_text(angle = 90, hjust = 1, size = 6))
+
+f2<-fviz_contrib(ACM, choice = "var", axes = 2)+
+
+  theme(axis.text.x = element_text(angle = 90, hjust = 1, size = 6))
+
+f3<-fviz_contrib(ACM,choice = "var", axes = 3)+
+
+  theme(axis.text.x = element_text(angle = 90, hjust = 1, size = 6))
+
+f4<-fviz_contrib(ACM, choice = "var", axes = 4)+
+
+  theme(axis.text.x = element_text(angle = 90, hjust = 1, size = 6))
+
+f1+f2+f3+f4
+
+```
+
+\FloatBarrier
+
+L'analyse des contributions des variables nous montre :
+
+- **L'axe 1** est dominé par les logements Récents (Post-1980) et l'étiquette DPE C.On note également une contribution significative des classes intermédiaires à faibles (etiquette_ges_E, etiquette_dpe_E)
+
+- **L'axe 2** est domminé par les logements de petites surfaces (5m-39m) , construits avant 1945 et l'étiquette centrale DPE/GES D
+
+- **L'axe 3** est marqué par les mauvaises performances énergétiques. Il est dominé par l'étiquette E (qui a la plus forte contribution) ainsi que les étiquettes critiques G (etiquette_dpe_G, etiquette_ges_G)
+
+- **L'axe 4** est principalement tiré par les étiquettes intermédiaires D (très forte contribution, etiquette_dpe_D) et C, représentant les logements "moyens" qui ne sont ni récents/vertueux, ni en situation de précarité énergétique extrême.
+
+## Représentation des variables
+```{r figure11, fig.cap="Représentation des corrélations des variables de l'ACM", out.width="60%", fig.align="center"}
+
+fviz_mca_var(ACM,choice = "var.cat",
+
+             axes = c(1,2),
+
+             repel = TRUE,     
+
+             col.var = "cos2",  
+
+             gradient.cols = c("#00AFBB", "#E7B800", "#FC4E07"))
+
+fviz_mca_var(ACM, choice = "var.cat",
+
+             axes = c(3,4),
+
+             repel = TRUE,     
+
+             col.var = "cos2",  
+
+             gradient.cols = c("#00AFBB", "#E7B800", "#FC4E07"))
+
+```
+\FloatBarrier
+
+- **Analyse du premier plan (Dimensions 1 et 2)** l'axe 1 oppose nettement les logements "Recents (Post 1980)", situés à gauche et regroupés avec les bonnes étiquettes (A, B, C), aux logements construits "Avant 1945", situés à droite et associés aux étiquettes énergivores (F, G) pour le DPE et le GES Parallèlement, l'axe 2 sépare verticalement les "Passoires Critiques" (F, G en haut) des logements moyens (D , en bas).
+
+- **Analyse du second plan (Dimensions 3 et 4)** l'axe 3 sépare les bons logements (A, B) de l'étiquette G (aussi bien en DPE qu'en GES) qui se retrouve toute seule à droite, bien à l'écart des autres. Parallèlement, l'axe 4 fait le tri dans le reste : il place les étiquettes G et D en haut du graphique, alors qu'il envoie les étiquettes (GES et DPE) F et E vers le bas, ce qui montre bien que ces groupes sont très différents et ne vont pas ensemble.
+
+## Nuage des Individus avec habillage
+
+```{r figure12, fig.cap="Nuage des bâtiments selon le DPE", out.width="60%", fig.align="center"}
+fviz_mca_ind(ACM,
+             habillage = "etiquette_dpe",
+             label = "none",             
+             addEllipses = TRUE,         
+             ellipse.level = 0.95,
+             title = "Nuage des individus selon le DPE")
+
+```
+\FloatBarrier
+
+Ce graphique montre clairement comment les logements se séparent en fonction de leur étiquette DPE. On d'un côté, en bas à gauche, on a les logements économes (A, B, C) qui restent groupés. De l'autre, en haut à droite, on trouve les logements mal isolés (F et G) qui consomment beaucoup. Comme les groupes ne se mélangent pas, cela prouve que nos axes séparent bien les bons logements des mauvais, avec la note D qui se trouve logiquement au milieu.
+
+```{r figure13, fig.cap="Nuage des bâtiments selon les etiquettes GES", out.width="60%", fig.align="center"}
+
+fviz_mca_ind(ACM,
+             habillage = "etiquette_ges",
+             label = "none",             
+             addEllipses = TRUE,         
+             ellipse.level = 0.95,
+             title = "Nuage des individus en fonction des etiquettes ges")
+
+```
+
+\FloatBarrier
+
+Ce graphique ressemble énormément au précédent, mais il concerne cette fois la pollution (les gaz à effet de serre). On voit que les logements qui polluent peu (classes A et B) sont rassemblés à gauche, alors que les logements qui polluent beaucoup (classes F et G) sont isolés tout en haut à droite. Le fait que ce dessin soit presque identique à celui du DPE prouve une chose simple : dans cette ville, les logements qui consomment le plus d'énergie sont aussi ceux qui ont le plus mauvais impact sur le climat.
+
+## Conclusion de l'ACM
+
+En réponse à notre problématique, l'Analyse des Correspondances Multiples révèle que la diversité des constructions structure fortement la performance énergétique selon des logiques historiques précises. Au-delà de l'opposition attendue entre le neuf et l'ancien (Axe 1), l'étude met en lumière une fracture majeure au sein même de ce dernier : les axes secondaires isolent nettement les logements standards (étiquettes D) des "passoires thermiques" critiques (étiquettes G, période 1945-1968).
+
+
+# Classification non supervisée (Clustering)
+
+Si l'ACM nous a permis de dégager les grandes dimensions structurantes de notre parc immobilier, elle ne permet pas encore de regrouper les logements de manière isolée. Afin de transformer ces tendances statistiques en profils concrets et opérationnels, nous allons maintenant procéder à une Classification Ascendante Hiérarchique (CAH) en nous basant sur les coordonnées factorielles précédemment extraites.
+
+```{r}
+
+res.HCPC <- HCPC(ACM, graph = F,
+
+                 consol = F)
+
+```
+
+
+Dans un premier temps nous allons déterminer le nombre de groupe optimal que nous allons retenir à partir à de deux critères :
+
+-**l'inertie intra-classe (Within cluster inertia)** qui mesure la cohésion au sein des clusters, et  
+-**le gain d'inertie inter-classe (Between inertia gain)** qui mesure la séparation entre les clusters.
+
+```{r figure14, fig.cap="Étude de l'inertie pour le choix du nombre de clusters", out.width="60%", fig.align="center"}
+library(ggplot2)
+library(patchwork)
+k <- 20
+df_p1 <- data.frame(
+  x = 1:k,
+  inertie = res.HCPC$call$t$within[1:k] / sum(res.HCPC$call$t$within)
+)
+p1 <- ggplot(df_p1, aes(x=x, y=inertie)) +
+  geom_bar(stat="identity", fill="steelblue", alpha=0.8) +
+  labs(title="Within cluster inertia", x="") +
+  theme_minimal()
+df_p2 <- data.frame(
+  x = 1:k,
+  gain = res.HCPC$call$t$inert.gain[1:k]
+)
+p2 <- ggplot(df_p2, aes(x=x, y=gain)) +
+  geom_bar(stat="identity", fill="darkorange", alpha=0.8) +
+  labs(title="Between inertia gain", x="Nombre de classes") +
+  theme_minimal()
+p1 + p2 +  plot_layout(ncol = 2)
+
+```
+\FloatBarrier
+
+Le nombre optimal de clusters se situe à 3 car, au-delà de ce point, l'ajout de clusters n'apporte plus qu'un très faible gain d'inertie, comme l'illustre le graphique du gain d'inertie (Between inertia gain) à droite
+
+```{r figure15, fig.cap="Dendrogramme de la classification hiérarchique", fig.align="center", out.width="60%", fig.pos='H'}
+res.HCPC_consol<-HCPC(ACM,nb.clust= 3,consol=TRUE,graph=FALSE)
+res.HCPC2<- HCPC(ACM,nb.clust=3,consol=FALSE,graph=FALSE)
+plot.HCPC(res.HCPC2,choice='tree',title='Arbre hiérarchique 2')
+```
+\FloatBarrier
+
+## Paragons
+
+```{r}
+para<-res.HCPC_consol$desc.ind$para
+dist<-res.HCPC_consol$desc.ind$dist
+par1 <- names(para[[1]])
+par2 <- names(para[[2]])
+par3 <- names(para[[3]])
+
+```
+Les parangons correspondent aux logements les plus proches du centre du cluster.Ce sont les logements les plus representatifs pour chaque cluster
+
+
+
+
+Sur le grand tableau dans l'annexe , nous remarquons que :
+- **Le cluster 1** regroupe des logements récents (majoritairement **2017-2018**) et performants. Ces logements representent le standard actuel car ils bénéficient d'une isolation moderne et d'étiquettes énergétiques valorisantes (C).
+_ **Le cluster 2** regroupe des logements plus grands (entre 75m² et 108m²), construits apres la seconde Guerre mondiale et caractérisés par une performance moyenne (étiquettes D).
+
+- **Le cluster 3 ** regroupe des logements datant de 1900 à 1929 caracterisés par de petites surfaces autour de (36 à 37 mètres) classées F tant pour le DPE que pour le GES.
+
+## Caractérisation des Classes
+
+```{r figure17, fig.cap="Caractéristiques du cluster 1", fig.align="center", out.width="60%", fig.pos='H'}
+res.HCPC_consol$desc.var$category$`1`|>
+  head(6) |>
+kable(digits = c(1,1,1,200,2), caption = "Caractéristiques du cluster 1") |>
+kable_styling(font_size = 12,
+              latex_options = c("striped", "scale_down"))
+
+```
+
+Ce Tableau suivant représente les différentes caractéristiques du Cluster 1
+— 100% des logements avec une modalité etiquette_dpe_C, B et A sont dans ce premier cluster.
+— On a également 83.1% des logements qui sont des logements Récents (Post 1980), et cette modalité représente 48.8% de la composition du cluster.
+— De même, 76.7% des logemenst ayant une modalité 405-5572 (faible consommation) sont présents dans ce cluster.
+
+
+
+```{r figure18, fig.cap="Caractéristiques du cluster 2", fig.align="center", out.width="60%", fig.pos='H'}
+res.HCPC_consol$desc.var$category$`2` |>
+  head(6) |> 
+  kable(digits = c(1,1,1,200,2), caption = "Caractéristiques du cluster 2") |>
+  kable_styling(font_size = 12,
+              latex_options = c("striped", "scale_down"))
+```
+ 
+Ce Tableau suivant représente les différentes caractéristiques du Cluster 2
+— 99.1% des logements avec une modalité etiquette_ges_D sont dans ce deuxième cluster, ainsi que 83.2% des individus ayant l'étiquette E.
+— On a également 75.0% des logements qui ont une consommation très élevée (12776-222596), et cette modalité représente 41.1% de la composition du cluster.
+— De même, 61.8% des individus construits durant la période 1945-1968 sont présents dans ce cluster, souvent associés à de grands ensembles (61-7635 appartements).
+
+```{r figure19, fig.cap="Caractéristiques du cluster 3", fig.align="center", out.width="60%", fig.pos='H'}
+res.HCPC_consol$desc.var$category$`3` |>
+  head(6) |> 
+  kable(digits = c(1,1,1,200,2), caption = "Caractéristiques du cluster 3") |>
+  kable_styling(font_size = 12,
+              latex_options = c("striped", "scale_down"))
+```
+
+\newpage 
+
+Ce Tableau suivant représente les différentes caractéristiques du Cluster 3
+— 100% des logements avec une modalité etiquette_ges_F et etiquette_dpe_G sont dans ce troisième cluster, ainsi que 98.2% des individus ayant l'étiquette DPE F.
+— On a également 58.1% des individus faisant partie du cluster qui datent de la période Avant 1945, et cette modalité caractérise la majorité du groupe.
+— De même, 55.6% des individus du cluster possèdent une petite surface habitable (5m-39m), associée souvent à une précarité énergétique.
+
+## Conclusion du clustering
+
+L'analyse a permis de segmenter l'ensemble du parc immobilier en 3 profils types très distincts, validés par les critères statistiques (le "coude" du graphique). Cette classification met en évidence une forte corrélation entre l'année de construction et la performance énergétique.
+Voici les trois typologies de logements:
+
+Le Parc Moderne et Vertueux (Cluster 1) : Ce groupe représente le standard cible. Il s'agit de logements récents (majoritairement post-1980 voire très récents), bien isolés et économes, classés majoritairement A, B ou C.
+
+Le Parc Intermédiaire d'Après-guerre (Cluster 2) : Ce sont de grands logements (souvent dans de grands ensembles) construits lors des Trente Glorieuses (1945-1968). Ils se caractérisent par une consommation élevée et une performance énergétique moyenne (étiquettes D et E).
+
+Le Parc Ancien et Précaire (Cluster 3) : Ce groupe rassemble les logements critiques : de petites surfaces construites avant 1945. Ils cumulent ancienneté et très mauvaise isolation, correspondant aux passoires énergétiques (étiquettes F et G).
+
+En résumé : L'étude confirme que la vétusté (l'âge) du bâtiment et la petite surface sont les deux facteurs principaux associés à une très mauvaise performance énergétique
+
+# **Conclusion Générale**
+
+
+Cette analyse approfondie du parc immobilier à travers l'ACP, l'AFC, l'ACM et la CAH a permis de révéler les dynamiques sous-jacentes qui structurent la performance énergétique des logements. L'ACP a mis en lumière les dimensions quantitatives clés, tandis que l'AFC a confirmé la forte dépendance entre les étiquettes DPE et GES. L'ACM a ensuite permis d'intégrer les caractéristiques qualitatives, dévoilant des profils types basés sur l'année de construction et la surface habitable. Enfin, la CAH a segmenté le parc en trois clusters distincts, allant des logements modernes et vertueux aux passoires énergétiques anciennes. Ces résultats fournissent une base solide pour orienter les politiques de rénovation énergétique et cibler les interventions sur les segments les plus critiques du parc immobilier.
+
+\newpage 
+
+# Annexe
+
+
+
+## Interprétation de l'axe 3
+
+```{r figure23 , fig.cap="Etude des contributions des modalités à l'axe 3", fig.align="center", out.width="65%"}
+
+contribrow_dim3 <- res.CA$row$contrib[, 3]
+contribcol_dim3 <- res.CA$col$contrib[, 3]
+
+contrib_data1 <- data.frame(
+  DPE = names(contribrow_dim3),
+  Contribution = as.numeric(contribrow_dim3)
+)
+
+contrib_data2 <- data.frame(
+  DPE = names(contribcol_dim3),
+  Contribution = as.numeric(contribcol_dim3)
+)
+
+ligne_ref <- 100 / nrow(contrib_data1)
+ligne_ref <- 100 / nrow(contrib_data2)
+
+
+fig1 <- ggplot(contrib_data1, aes(x = reorder(DPE, -Contribution), 
+                                  y = Contribution, 
+                                  fill = DPE)) +
+  geom_col() +
+  scale_fill_manual(values = couleurs) +
+  geom_hline(yintercept = ligne_ref, 
+             linetype = "dashed", 
+             color = "red", 
+             linewidth = 0.8) +
+  labs(title = "Contribution des DPE à la Dim3",
+       x = "",
+       y = "Contributions (%)") +
+  theme_minimal() +
+  theme(legend.position = "none",
+        plot.title = element_text(hjust = 0.5, size = 14, face = "bold"))
+
+fig2 <- ggplot(contrib_data2, aes(x = reorder(DPE, -Contribution), 
+                                  y = Contribution, 
+                                  fill = DPE)) +
+  geom_col() +
+  scale_fill_manual(values = couleurs_ges) +
+  geom_hline(yintercept = ligne_ref, 
+             linetype = "dashed", 
+             color = "red", 
+             linewidth = 0.8) +
+  labs(title = "Contribution des GES à la Dim 3",
+       x = "",
+       y = "Contributions (%)") +
+  theme_minimal() +
+  theme(legend.position = "none",
+        plot.title = element_text(hjust = 0.5, size = 14, face = "bold"))
+
+ggarrange(fig1, fig2, ncol = 2)
+```
+
+
+## Interprétation de l'axe 4
+
+```{r figure20, fig.cap="Etude des contributions des modalités à l'axe 4", fig.align="center", out.width="65%"}
+
+contribrow_dim4 <- res.CA$row$contrib[, 4]
+contribcol_dim4 <- res.CA$col$contrib[, 4]
+
+contrib_data1 <- data.frame(
+  DPE = names(contribrow_dim4),
+  Contribution = as.numeric(contribrow_dim4)
+)
+
+contrib_data2 <- data.frame(
+  DPE = names(contribcol_dim4),
+  Contribution = as.numeric(contribcol_dim4)
+)
+
+ligne_ref <- 100 / nrow(contrib_data1)
+ligne_ref <- 100 / nrow(contrib_data2)
+
+
+fig1 <- ggplot(contrib_data1, aes(x = reorder(DPE, -Contribution), 
+                                  y = Contribution, 
+                                  fill = DPE)) +
+  geom_col() +
+  scale_fill_manual(values = couleurs) +
+  geom_hline(yintercept = ligne_ref, 
+             linetype = "dashed", 
+             color = "red", 
+             linewidth = 0.8) +
+  labs(title = "Contribution des DPE a la Dim 4",
+       x = "",
+       y = "Contributions (%)") +
+  theme_minimal() +
+  theme(legend.position = "none",
+        plot.title = element_text(hjust = 0.5, size = 14, face = "bold"))
+
+fig2 <- ggplot(contrib_data2, aes(x = reorder(DPE, -Contribution), 
+                                  y = Contribution, 
+                                  fill = DPE)) +
+  geom_col() +
+  scale_fill_manual(values = couleurs_ges) +
+  geom_hline(yintercept = ligne_ref, 
+             linetype = "dashed", 
+             color = "red", 
+             linewidth = 0.8) +
+  labs(title = "Contribution des GES a la Dim 4",
+       x = "",
+       y = "Contributions (%)") +
+  theme_minimal() +
+  theme(legend.position = "none",
+        plot.title = element_text(hjust = 0.5, size = 14, face = "bold"))
+
+ggarrange(fig1, fig2, ncol = 2)
+
+```
+
+
+```{r figure21, fig.cap= "Biplot des étiquettes DPE et GES", fig.align="center", out.width="60%"}
+row_coord <- as.data.frame(res.CA$row$coord[, 3:4])
+col_coord <- as.data.frame(res.CA$col$coord[, 3:4])
+colnames(col_coord)[1] <- "Dim.3"
+colnames(col_coord)[2] <- "Dim.4"
+colnames(row_coord)[1] <- "Dim.3"
+colnames(row_coord)[2] <- "Dim.4"
+
+ggplot() +
+  geom_point(data = row_coord, aes(x = Dim.3, y = Dim.4), 
+             color = couleurs_ges, shape = 19, size = 3) +
+  geom_text(data = row_coord, aes(x = Dim.3, y = Dim.4, label = rownames(row_coord)),
+            color = couleurs_ges, vjust = -1) +
+  geom_point(data = col_coord, aes(x = Dim.3, y = Dim.4), 
+             color = couleurs, shape = 17, size = 3) +
+  geom_text(data = col_coord, aes(x = Dim.3, y = Dim.4, label = rownames(col_coord)),
+            color = couleurs, vjust = -1) +
+  geom_hline(yintercept = 0, linetype = "dashed") +
+  geom_vline(xintercept = 0, linetype = "dashed") +
+  theme_minimal() +
+  labs(x = "Dim3 (20%)", y = "Dim4 (14.7%)") +
+  xlim(-1.5, 2.5) +
+  ylim(-1.5, 4)
+```
+
+\newpage 
+
+\begin{landscape}
+
+```{r, results='asis'}
+DPE[c(par1, par2, par3),] |>   
+  select(-adresse, -numero_dpe) |>   
+  kable(format = "latex") |>   
+  kable_styling(
+    full_width = TRUE,
+    position = "center",
+    font_size = 10,
+    latex_options =  "scale_down"
+  ) |> 
+  pack_rows("Cluster 1", 1, length(par1)) |>
+  pack_rows("Cluster 2", length(par1) + 1, length(par1) + length(par2)) |>
+  pack_rows("Cluster 3", length(par1) + length(par2) + 1, 
+            length(par1) + length(par2) + length(par3))
+```
+\end{landscape}
