@@ -1,4 +1,4 @@
-# Projet M1 : Diagnostics de Performance Électrique (DPE)
+# Projet M1 : Diagnostics de Performance Énergétique (DPE)
 
 ![Contexte](https://img.shields.io/badge/Cadre-Master%201-blue)
 ![Outils](https://img.shields.io/badge/R-RStudio-green)
